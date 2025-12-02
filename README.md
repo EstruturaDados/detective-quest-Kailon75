@@ -1,108 +1,189 @@
-# Desafio Detective Quest - Estruturas de Dados e Investigação
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-Bem-vindo ao desafio **Detective Quest**! Neste jogo de mistério, o jogador explora uma mansão, encontra pistas e relaciona evidências a suspeitos. Para tornar isso possível, você atuará como programador responsável por implementar toda a lógica de estruturas de dados do jogo.
+#define HASH_SIZE 10  // Tamanho da tabela hash
 
-A **Enigma Studios**, especializada em jogos educacionais, contratou você para criar a base de funcionamento da mansão e das investigações usando **árvore binária**, **árvore de busca** e **tabela hash**.
+// =======================
+// ESTRUTURAS
+// =======================
 
-O desafio está dividido em três níveis: **Novato**, **Aventureiro** e **Mestre**, com cada nível adicionando mais complexidade ao anterior.  
-**Você deve escolher qual desafio deseja realizar.**
+// Árvore binária dos cômodos
+typedef struct Sala {
+    char nome[30];
+    struct Sala *esquerda;
+    struct Sala *direita;
+    char *pista; // Pista encontrada nesta sala (NULL se não houver)
+} Sala;
 
-🚨 **Atenção:** O nível Novato foca apenas na árvore binária de navegação de cômodos. Ideal para começar com estruturas básicas.
+// BST para pistas
+typedef struct Pista {
+    char nome[30];
+    struct Pista *esquerda;
+    struct Pista *direita;
+} Pista;
 
----
+// Lista encadeada para tabela hash (suspeitos)
+typedef struct SuspeitoNode {
+    char suspeito[30];
+    struct SuspeitoNode *prox;
+} SuspeitoNode;
 
-## 🎮 Nível Novato: Mapa da Mansão com Árvore Binária
+typedef struct HashNode {
+    char pista[30];
+    SuspeitoNode *suspeitos;
+    struct HashNode *prox;
+} HashNode;
 
-No nível Novato, você criará a árvore binária que representa o **mapa da mansão**. Cada sala é um nó, e o jogador poderá explorar os caminhos à esquerda ou à direita, começando pelo "Hall de Entrada".
+HashNode* tabelaHash[HASH_SIZE];
 
-🚩 **Objetivo:** Criar um programa em C que:
+// =======================
+// FUNÇÕES DE ÁRVORE DE SALAS
+// =======================
+Sala* criarSala(char *nome, char *pista, Sala *esq, Sala *dir) {
+    Sala *s = (Sala*) malloc(sizeof(Sala));
+    strcpy(s->nome, nome);
+    if (pista) {
+        s->pista = (char*) malloc(strlen(pista)+1);
+        strcpy(s->pista, pista);
+    } else {
+        s->pista = NULL;
+    }
+    s->esquerda = esq;
+    s->direita = dir;
+    return s;
+}
 
-- Construa dinamicamente uma árvore binária representando os cômodos.
-- Permita que o jogador explore a mansão interativamente (esquerda, direita).
-- Exiba o nome de cada cômodo visitado até alcançar um nó-folha (fim do caminho).
+// =======================
+// FUNÇÕES DE BST PARA PISTAS
+// =======================
+Pista* inserirPista(Pista *raiz, char *nome) {
+    if (!raiz) {
+        Pista *novo = (Pista*) malloc(sizeof(Pista));
+        strcpy(novo->nome, nome);
+        novo->esquerda = novo->direita = NULL;
+        return novo;
+    }
+    if (strcmp(nome, raiz->nome) < 0)
+        raiz->esquerda = inserirPista(raiz->esquerda, nome);
+    else if (strcmp(nome, raiz->nome) > 0)
+        raiz->direita = inserirPista(raiz->direita, nome);
+    return raiz;
+}
 
-⚙️ **Funcionalidades do Sistema:**
+void emOrdemPistas(Pista *raiz) {
+    if (!raiz) return;
+    emOrdemPistas(raiz->esquerda);
+    printf("- %s\n", raiz->nome);
+    emOrdemPistas(raiz->direita);
+}
 
-- A árvore é criada automaticamente via `main()` com `criarSala()`.
-- O jogador interage com o jogo usando `explorarSalas()`, escolhendo entre:
-  - `e` → ir para a esquerda
-  - `d` → ir para a direita
-  - `s` → sair da exploração
+// =======================
+// FUNÇÕES DE HASH PARA SUSPEITOS
+// =======================
+int hash(char *chave) {
+    int soma = 0;
+    for (int i = 0; i < strlen(chave); i++)
+        soma += chave[i];
+    return soma % HASH_SIZE;
+}
 
-📥 **Entrada** e 📤 **Saída de Dados:**
+void inserirNaHash(char *pista, char *suspeito) {
+    int idx = hash(pista);
+    HashNode *atual = tabelaHash[idx];
 
-*   O usuário navega pela mansão com base nas opções exibidas no terminal.
-*   O programa mostra o nome da sala visitada a cada passo.
+    // Procura se já existe a pista
+    while (atual) {
+        if (strcmp(atual->pista, pista) == 0) break;
+        atual = atual->prox;
+    }
 
-**Simplificações para o Nível Novato:**
+    if (!atual) { // Não existe → cria
+        atual = (HashNode*) malloc(sizeof(HashNode));
+        strcpy(atual->pista, pista);
+        atual->suspeitos = NULL;
+        atual->prox = tabelaHash[idx];
+        tabelaHash[idx] = atual;
+    }
 
-*   Apenas árvore binária (sem inserção ou remoção durante o jogo).
-*   A árvore é montada estaticamente via código.
-*   Estrutura imutável em tempo de execução.
+    // Insere suspeito na lista da pista
+    SuspeitoNode *novo = (SuspeitoNode*) malloc(sizeof(SuspeitoNode));
+    strcpy(novo->suspeito, suspeito);
+    novo->prox = atual->suspeitos;
+    atual->suspeitos = novo;
+}
 
----
+void mostrarHash() {
+    printf("\n--- Associações Pista → Suspeito ---\n");
+    for (int i = 0; i < HASH_SIZE; i++) {
+        HashNode *atual = tabelaHash[i];
+        while (atual) {
+            printf("%s: ", atual->pista);
+            SuspeitoNode *s = atual->suspeitos;
+            while (s) {
+                printf("%s ", s->suspeito);
+                s = s->prox;
+            }
+            printf("\n");
+            atual = atual->prox;
+        }
+    }
+}
 
-## 🛡️ Nível Aventureiro: Organização de Pistas com Árvore de Busca
+// =======================
+// FUNÇÃO DE EXPLORAÇÃO
+// =======================
+void explorarSalas(Sala *atual, Pista **raizPistas) {
+    char opc;
+    while (atual) {
+        printf("\nVocê está na sala: %s\n", atual->nome);
 
-No nível Aventureiro, você expandirá o jogo incluindo uma **árvore de busca (BST)** para armazenar pistas encontradas.
+        // Coleta pista se existir
+        if (atual->pista) {
+            printf("Você encontrou a pista: %s!\n", atual->pista);
+            *raizPistas = inserirPista(*raizPistas, atual->pista);
+            // Exemplo: associa cada pista a um suspeito (hardcoded para demonstração)
+            inserirNaHash(atual->pista, "Sr. X");
+            inserirNaHash(atual->pista, "Sra. Y");
+        }
 
-🆕 **Diferença em relação ao Nível Novato:**
+        if (!atual->esquerda && !atual->direita) {
+            printf("Fim do caminho.\n");
+            break;
+        }
 
-*   Agora, ao visitar certos cômodos, o jogador encontrará pistas.
-*   Essas pistas são armazenadas ordenadamente em uma BST.
+        printf("Escolha direção: (e=esquerda, d=direita, s=sair): ");
+        scanf(" %c", &opc);
 
-⚙️ **Funcionalidades do Sistema:**
+        if (opc == 'e') atual = atual->esquerda;
+        else if (opc == 'd') atual = atual->direita;
+        else if (opc == 's') break;
+        else printf("Opção inválida!\n");
+    }
+}
 
-*   Implementar inserção e busca de strings (pistas) na árvore de busca.
-*   Permitir que o jogador visualize todas as pistas em ordem alfabética.
-*   Adicionar novas pistas automaticamente ao visitar salas específicas.
+// =======================
+// MAIN
+// =======================
+int main() {
+    // Inicializa tabela hash
+    for (int i = 0; i < HASH_SIZE; i++) tabelaHash[i] = NULL;
 
-📥 **Entrada** e 📤 **Saída de Dados:**
+    // Construção estática da mansão
+    Sala *sala5 = criarSala("Biblioteca", "Pista Livro", NULL, NULL);
+    Sala *sala4 = criarSala("Jardim", "Pista Flor", NULL, NULL);
+    Sala *sala3 = criarSala("Cozinha", "Pista Receita", NULL, NULL);
+    Sala *sala2 = criarSala("Quarto", NULL, sala4, sala5);
+    Sala *sala1 = criarSala("Sala de Estar", "Pista Sofá", sala2, sala3);
 
-*   As pistas são cadastradas via `inserir()` ao serem encontradas.
-*   O programa pode listar todas as pistas com `emOrdem()`.
+    Pista *raizPistas = NULL;
 
-**Simplificações para o Nível Intermediário:**
+    explorarSalas(sala1, &raizPistas);
 
-*   Nenhuma remoção é necessária.
-*   Não é necessário balancear a árvore.
-*   As pistas são strings simples (nomes curtos).
+    printf("\n--- Todas as pistas coletadas (em ordem) ---\n");
+    emOrdemPistas(raizPistas);
 
----
+    mostrarHash();
 
-## 🏆 Nível Mestre: Suspeitos e Solução com Tabela Hash
-
-No nível Mestre, você implementará a **tabela hash** para vincular pistas a **suspeitos**. Agora o jogador pode consultar quem está associado a cada pista e deduzir o culpado com base nas evidências coletadas.
-
-🆕 **Diferença em relação ao Nível Aventureiro:**
-
-*   Cada pista armazenada na BST será relacionada a um suspeito via tabela hash.
-*   Ao final, o jogador poderá ver qual suspeito está mais associado às pistas e decidir quem é o culpado.
-
-⚙️ **Funcionalidades do Sistema:**
-
-*   Implementar uma tabela hash (array de ponteiros ou lista encadeada).
-*   Função de inserção que relaciona pista → suspeito.
-*   Permitir consulta de todas as pistas relacionadas a cada suspeito.
-*   Mostrar o “suspeito mais citado” ao final da análise.
-
-📥 **Entrada** e 📤 **Saída de Dados:**
-
-*   As pistas e suspeitos são armazenados via `inserirNaHash(pista, suspeito)`.
-*   O programa exibe as associações pista → suspeito.
-*   Exibe o suspeito mais citado com base nas pistas armazenadas.
-
-**Observações:**
-
-*   Pode utilizar hashing simples com função de espalhamento baseada em primeiros caracteres ou soma ASCII.
-*   O ideal é evitar colisões, mas, se ocorrerem, use encadeamento.
-
----
-
-## 🏁 Conclusão
-
-Ao concluir qualquer um dos níveis, você terá desenvolvido um sistema de investigação funcional em C, utilizando estruturas fundamentais como árvores e tabelas hash para controlar lógica de jogo.
-
-Boa sorte, e divirta-se programando com **Detective Quest**!
-
-Equipe de Ensino – Enigma Studios
+    return 0;
+}
